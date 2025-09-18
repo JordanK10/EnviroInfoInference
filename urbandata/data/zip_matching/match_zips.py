@@ -5,14 +5,14 @@ from scipy.spatial.distance import cdist
 
 def load_data():
     """Load data files."""
-    with open('/Users/jordankemp/Desktop/UrbanInformation/urbandata/data/data_retrieval/cbsa_acs_data.pkl', 'rb') as f:
+    with open('/Users/jordankemp/Documents/EnviroInfoInference/legacy/urbandata/data/data_retrieval/cbsa_acs_data.pkl', 'rb') as f:
         cbsa_acs_data = pickle.load(f)
-    zip_data = pd.read_csv('uszips.csv')
+    zip_data = pd.read_csv('/Users/jordankemp/Documents/EnviroInfoInference/legacy/urbandata/data/zip_matching/uszips.csv')
     return cbsa_acs_data, zip_data
 
 def load_centroids_2010():
     """Load block group centroids from 2010 Census."""
-    dbf_file = 'nhgis0001_shapefile_cenpop2010_us_blck_grp_cenpop_2010/US_blck_grp_cenpop_2010.dbf'
+    dbf_file = '/Users/jordankemp/Documents/EnviroInfoInference/legacy/urbandata/data/zip_matching/nhgis0001_shapefile_cenpop2010_us_blck_grp_cenpop_2010/US_blck_grp_cenpop_2010.dbf'
     
     with open(dbf_file, 'rb') as f:
         header = f.read(32)
@@ -61,7 +61,7 @@ def load_centroids_2010():
 
 def load_centroids_2020():
     """Load block group centroids from 2020 Census."""
-    dbf_file = 'nhgis0001_shapefile_cenpop2020_us_blck_grp_cenpop_2020/US_blck_grp_cenpop_2020.dbf'
+    dbf_file = '/Users/jordankemp/Documents/EnviroInfoInference/legacy/urbandata/data/zip_matching/nhgis0001_shapefile_cenpop2020_us_blck_grp_cenpop_2020/US_blck_grp_cenpop_2020.dbf'
     
     with open(dbf_file, 'rb') as f:
         header = f.read(32)
@@ -187,10 +187,26 @@ def main():
     results = match_blockgroups_to_zips(cbsa_acs_data, zip_data, centroids_2010, centroids_2020)
     
     print("Saving results...")
-    with open('blockgroups_with_zips_temporal.pkl', 'wb') as f:
-        pickle.dump(results, f)
+    # --- Combine into a single DataFrame and save as CSV ---
+    print("Combining all MSA DataFrames into a single file...")
     
-    print("Done!")
+    all_msa_dfs = []
+    for msa_name, df in results.items():
+        df['msa_name'] = msa_name  # Add the MSA name as a column
+        all_msa_dfs.append(df)
+
+    # Concatenate all dataframes
+    combined_df = pd.concat(all_msa_dfs, ignore_index=True)
+    
+    # Define the output CSV file path
+    output_csv_path = 'blockgroups_with_zips_temporal.csv'
+
+    print(f"Saving combined data for {combined_df['msa_name'].nunique()} MSAs to {output_csv_path}...")
+    
+    # Save to CSV
+    combined_df.to_csv(output_csv_path, index=False)
+    
+    print(f"✓ Successfully saved data to {output_csv_path}")
 
 if __name__ == "__main__":
     main() 
