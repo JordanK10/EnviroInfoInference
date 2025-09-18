@@ -1,0 +1,36 @@
+Phase 1: Setup and Data Preparation
+This phase focuses on loading the data and transforming it into the format required by the inference functions.
+Load Data:
+Load the blockgroups_with_zips_temporal.pkl file. This will be a dictionary where keys are MSA names and values are pandas DataFrames.
+Function Call: pickle.load()
+Pre-process DataFrames:
+Iterate through each MSA's DataFrame.
+Calculate Tract FIPS: Create a new tract_fips column by taking the first 11 characters of the block_group_fips column. This is necessary for grouping by tract.
+Calculate Income Growth Rates: The models require log-income growth rates, not mean income. For each block_group_fips, calculate a growth_rate series: log(mean_income_t) - log(mean_income_t-1). This will result in one fewer timestep than you have years. Store this as a new column or in a way that's easy to access. Handle potential NaNs or zeros in income gracefully.
+Phase 2: Constructing the Analysis Pipeline
+This phase builds a master list of every analysis "task" to be run. Each task is a unique combination of an MSA and a geographic aggregation level.
+Initialize Pipeline: Create an empty list, analysis_pipeline.
+Populate Pipeline: Loop through each MSA in the loaded data. For each MSA:
+MSA Level: Add a task for the entire MSA. This task object could be a dictionary like: {'msa': 'Chicago-...', 'level': 'msa', 'group_id': 'Chicago-...'}.
+County Level: Find all unique county_fips codes in the MSA's DataFrame. For each unique county, add a task: {'msa': 'Chicago-...', 'level': 'county', 'group_id': '17031'}.
+ZIP Code Level: Find all unique closest_zip codes. For each, add a task: {'msa': 'Chicago-...', 'level': 'zip', 'group_id': '60601'}.
+Tract Level: Find all unique tract_fips codes. For each, add a task: {'msa': 'Chicago-...', 'level': 'tract', 'group_id': '17031839000'}.
+Phase 3: Execution Engine
+This phase iterates through the analysis_pipeline and runs the inference models for each task.
+Initialize Results Storage: Create an empty dictionary, results = {}, to store the output.
+Loop Through Pipeline: For each task in analysis_pipeline:
+Filter Data: Select the subset of the MSA's DataFrame corresponding to the task's level and group_id.
+Prepare Model Inputs:
+growth_rates_data: A list where each element is the time series of income growth rates for one block group in the filtered data.
+population_weights: A list of the final year's population for each of those block groups.
+Estimate p_t:
+Function Call: bayesian_p_estimation(growth_rates_data, population_weights)
+This returns the p_t_series for the defined environment (e.g., for the specific county or ZIP code).
+Estimate l_t (and x):
+Initialize an empty list to store the inferred l for each timestep: l_t_series = [].
+Loop through each timestep t in the p_t_series:
+Get p_hat_t (the value of p at that timestep).
+Get y_values_t (a list of the growth rates of all block groups in the group at that specific timestep t).
+Function Call: fit_l_and_x_hierarchical(y_values_t, p_hat_t, population_weights_t)
+From the returned idata, extract the mean of the posterior for l and append it to l_t_series.
+Store Results: Save the inferred p_t_series and l_t_series in the results dictionary. Use a unique key for the task (e.g., 'Chicago-..._county_17031').

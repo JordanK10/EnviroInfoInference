@@ -1,0 +1,100 @@
+\documentclass{article}
+\usepackage{amsmath}
+\usepackage{geometry}
+\geometry{a4paper, margin=1in}
+\title{Analytical Error Propagation for ACS Economic Indicators}
+\author{Urban Information Project}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\section{Introduction}
+
+This document details the analytical methods used to propagate measurement uncertainty from the American Community Survey (ACS) into derived economic indicators, specifically log growth rates and the fraction of positively growing units ($p$). The ACS provides a Margin of Error (MOE) for its estimates, which corresponds to a 90\% confidence interval. The relationship between MOE and standard error ($\sigma$) is given by:
+\[
+\sigma = \frac{\text{MOE}}{1.645}
+\]
+All derivations will be presented in terms of standard error ($\sigma$) and then converted to MOE for the final formulas used in the code.
+
+\section{Uncertainty in the Log Growth Rate}
+
+The growth rate ($g$) between a current year's income ($x$) and a previous year's income ($y$) is calculated as the difference of their natural logarithms. This is a standard method in economics that provides symmetric, additive growth rates.
+
+\subsection{Derivation}
+
+The function for the log growth rate is:
+\[
+g(x, y) = \ln(x) - \ln(y)
+\]
+
+The general formula for the propagation of variance for a function $g(x, y)$, assuming uncorrelated errors in $x$ and $y$, is:
+\[
+\sigma_g^2 = \left(\frac{\partial g}{\partial x}\right)^2 \sigma_x^2 + \left(\frac{\partial g}{\partial y}\right)^2 \sigma_y^2
+\]
+
+The partial derivatives of the log growth rate function are:
+\[
+\frac{\partial g}{\partial x} = \frac{1}{x} \quad \text{and} \quad \frac{\partial g}{\partial y} = -\frac{1}{y}
+\]
+
+Substituting these into the variance formula yields:
+\[
+\sigma_g^2 = \left(\frac{1}{x}\right)^2 \sigma_x^2 + \left(-\frac{1}{y}\right)^2 \sigma_y^2 = \left(\frac{\sigma_x}{x}\right)^2 + \left(\frac{\sigma_y}{y}\right)^2
+\]
+
+This elegant result shows that the variance of the log growth rate is the sum of the squared relative standard errors of the two income measurements. To express this in terms of MOE, we can substitute $\sigma = \text{MOE}/1.645$:
+\[
+\left(\frac{\text{MOE}_g}{1.645}\right)^2 = \left(\frac{\text{MOE}_x/1.645}{x}\right)^2 + \left(\frac{\text{MOE}_y/1.645}{y}\right)^2
+\]
+The $1.645^2$ term cancels from all terms, leaving the final formula for the MOE of the growth rate:
+\[
+\boxed{\text{MOE}_g = \sqrt{\left(\frac{\text{MOE}_x}{x}\right)^2 + \left(\frac{\text{MOE}_y}{y}\right)^2}}
+\]
+This is the formula implemented in the processing script.
+
+\section{Uncertainty in Population-Weighted Statistics}
+
+To aggregate block-group-level statistics to the city (CBSA) level, we compute a population-weighted mean.
+
+\subsection{Weighted Mean Growth Rate}
+
+The population-weighted mean growth rate ($\bar{g}$) is calculated as:
+\[
+\bar{g} = \frac{\sum_{i=1}^{N} w_i g_i}{\sum_{i=1}^{N} w_i}
+\]
+where $w_i$ is the population and $g_i$ is the log growth rate for block group $i$.
+
+The variance of this weighted mean, assuming the weights $w_i$ are known constants, is:
+\[
+\sigma_{\bar{g}}^2 = \frac{\sum_{i=1}^{N} w_i^2 \sigma_{g_i}^2}{(\sum_{i=1}^{N} w_i)^2}
+\]
+This is the standard formula for the variance of a weighted mean and is what the code implements.
+
+\subsection{Fraction of Positive Growth ($p$)}
+The value $p$ is the population-weighted fraction of block groups that experienced positive income growth. It is calculated as:
+\[
+p = \frac{\sum_{i \in \text{growth}>0} w_i}{\sum_{i=1}^{N} w_i}
+\]
+The uncertainty for this proportion is calculated using the standard formula for a binomial proportion, where the effective sample size is the total population ($N_{\text{eff}} = \sum w_i$):
+\[
+\sigma_p = \sqrt{\frac{p(1-p)}{N_{\text{eff}}}}
+\]
+This provides an estimate of the sampling error for the proportion $p$.
+
+\section{Limitations and Justifications}
+
+The methodology described above is robust and standard practice, but it is important to acknowledge its analytical limitations.
+
+\subsection{Uncertainty in Population Weights}
+The derivation for the weighted mean growth rate (Section 3.1) treats the population weights ($w_i$) as fixed, known values. However, the ACS population figures are also estimates and have their own MOE. Propagating uncertainty from both the values ($g_i$) and the weights ($w_i$) simultaneously is analytically complex and seldom done in practice.
+
+\textbf{Justification:} This simplification is generally considered acceptable because the uncertainty contributed by the weights is a second-order effect. The relative uncertainty in population counts is often smaller than the relative uncertainty in income, and especially smaller than the propagated uncertainty in growth rates. Therefore, the dominant source of error in the weighted mean is the error in the growth rates themselves, which our model correctly captures.
+
+\subsection{Classification Uncertainty for the $p$-Value}
+The calculation of the $p$-value involves a "hard classification" step. A block group's growth rate ($g_i$) is classified as positive if its point estimate is greater than zero, even if its uncertainty interval spans zero (e.g., $g_i = 0.5\% \pm 2.0\%$). This classification ignores the probability that the true growth rate might be negative.
+
+\textbf{Justification:} This is a pragmatic approximation. A fully probabilistic approach would require modeling each block group's growth rate as a distribution (e.g., a Normal distribution defined by its estimate and standard error) and then calculating the probability of it being positive ($P(g_i > 0)$). The overall $p$ would be the weighted average of these probabilities. While analytically more pure, this method is significantly more complex. The current method provides a reliable and computationally efficient estimate of $p$, and its uncertainty calculation correctly captures the sampling error based on population size, which is the primary driver of uncertainty in the overall proportion.
+
+\end{document} 
