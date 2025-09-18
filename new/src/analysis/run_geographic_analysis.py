@@ -267,19 +267,33 @@ def main():
     Main function to run the entire analysis pipeline.
     """
     # --- Load All Data ---
-    data_path = project_root / "data" / "processed" / "blockgroups_with_zips_temporal.pkl"
+    # The new data source is a single CSV file. We load it and then reconstruct
+    # the dictionary-of-DataFrames format that the rest of the script expects.
+    data_path = project_root / "data" / "processed" / "blockgroups_with_zips_temporal.csv"
     print(f"Loading data from {data_path}...")
     try:
-        with open(data_path, 'rb') as f:
-            all_msa_data = pickle.load(f)
-        print(f"✓ Loaded data for {len(all_msa_data)} MSAs.\n")
+        # Use the legacy path if the new one doesn't exist, for backward compatibility
+        legacy_path = project_root / "legacy" / "urbandata" / "data" / "zip_matching" / "blockgroups_with_zips_temporal.csv"
+        if not data_path.exists() and legacy_path.exists():
+            print(f"  > Note: Using legacy data file at {legacy_path}")
+            data_path = legacy_path
+
+        combined_df = pd.read_csv(data_path)
+        
+        # Reconstruct the dictionary format: {msa_name: msa_dataframe}
+        all_msa_data = {
+            msa_name: msa_df.drop(columns='msa_name').reset_index(drop=True)
+            for msa_name, msa_df in combined_df.groupby('msa_name')
+        }
+        print(f"✓ Loaded and reshaped data for {len(all_msa_data)} MSAs.\n")
+
     except FileNotFoundError:
-        print(f"Error: Data file not found at {data_path}")
+        print(f"Error: Data file not found at {data_path} or {legacy_path}")
         return
 
     # --- Set target MSAs for processing ---
     # To run for all, set target_msas = None
-    #target_msas = ['Atlanta-Sandy Springs-Roswell, GA']
+    target_msas = ['Atlanta-Sandy Springs-Roswell, GA']
     
     if target_msas:
         msa_to_process = {k: v for k, v in all_msa_data.items() if k in target_msas}
